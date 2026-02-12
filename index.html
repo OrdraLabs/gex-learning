@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEX — Gamma Exposure for Intraday Traders</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e17;--bg2:#111827;--bg3:#1a2235;--bg4:#243049;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#22d3ee;--accent2:#06b6d4;--green:#34d399;--red:#f87171;--yellow:#fbbf24;--purple:#a78bfa;--orange:#fb923c;
+  --border:#1e293b;--radius:10px;
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:'SF Mono','Fira Code','Cascadia Code',monospace;background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none}
+h1,h2,h3,h4{font-weight:600;line-height:1.3}
+h1{font-size:2rem;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{font-size:1.5rem;color:var(--accent);margin-bottom:1rem}
+h3{font-size:1.15rem;color:var(--text);margin-bottom:.5rem}
+
+/* Progress bar */
+#progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--purple));z-index:1000;transition:width .2s}
+
+/* Sidebar */
+#sidebar{position:fixed;left:0;top:0;bottom:0;width:260px;background:var(--bg2);border-right:1px solid var(--border);padding:1.5rem 0;overflow-y:auto;z-index:100;transition:transform .3s}
+#sidebar .logo{padding:0 1.2rem 1.5rem;font-size:1.1rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);margin-bottom:1rem}
+#sidebar .logo span{color:var(--text3);font-weight:400;font-size:.75rem;display:block}
+.nav-item{display:block;padding:.55rem 1.2rem;color:var(--text3);font-size:.8rem;cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.nav-item:hover,.nav-item.active{color:var(--text);background:var(--bg3);border-left-color:var(--accent)}
+.nav-item .num{color:var(--accent);margin-right:.4rem;font-size:.7rem}
+#menu-toggle{display:none;position:fixed;top:1rem;left:1rem;z-index:200;background:var(--bg3);border:1px solid var(--border);color:var(--accent);padding:.4rem .7rem;border-radius:6px;cursor:pointer;font-size:1.2rem}
+
+/* Main */
+main{margin-left:260px;max-width:900px;padding:3rem 2.5rem 6rem}
+section{margin-bottom:4rem;opacity:0;transform:translateY(30px);transition:all .5s ease}
+section.visible{opacity:1;transform:none}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin:.8rem 0}
+.card-accent{border-left:3px solid var(--accent)}
+.card-green{border-left:3px solid var(--green)}
+.card-red{border-left:3px solid var(--red)}
+.card-yellow{border-left:3px solid var(--yellow)}
+.card-purple{border-left:3px solid var(--purple)}
+.tag{display:inline-block;padding:.15rem .6rem;border-radius:20px;font-size:.7rem;font-weight:600;margin:.2rem}
+.tag-green{background:#34d39922;color:var(--green)}
+.tag-red{background:#f8717122;color:var(--red)}
+.tag-yellow{background:#fbbf2422;color:var(--yellow)}
+.tag-accent{background:#22d3ee22;color:var(--accent)}
+.tag-purple{background:#a78bfa22;color:var(--purple)}
+
+/* Collapsible */
+.collapsible{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:1rem 1.2rem;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);margin:.5rem 0;transition:background .2s}
+.collapsible:hover{background:var(--bg4)}
+.collapsible::after{content:'▸';transition:transform .2s;color:var(--accent)}
+.collapsible.open::after{transform:rotate(90deg)}
+.collapsible-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.collapsible-body.open{max-height:5000px}
+.collapsible-inner{padding:1.2rem}
+
+/* Interactive elements */
+button,.btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.5rem 1.2rem;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.85rem;transition:all .15s}
+button:hover,.btn:hover{background:var(--bg4);border-color:var(--accent)}
+.btn-accent{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.btn-accent:hover{background:var(--accent2)}
+.btn-green{border-color:var(--green);color:var(--green)}
+.btn-green:hover{background:var(--green);color:var(--bg)}
+.btn-red{border-color:var(--red);color:var(--red)}
+.btn-red:hover{background:var(--red);color:var(--bg)}
+
+/* Toggle */
+.toggle-group{display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;display:inline-flex}
+.toggle-btn{padding:.5rem 1.2rem;background:var(--bg2);border:none;color:var(--text3);cursor:pointer;font-family:inherit;font-size:.85rem;transition:all .15s}
+.toggle-btn.active{background:var(--accent);color:var(--bg);font-weight:600}
+
+/* Slider */
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:var(--bg4);border-radius:3px;outline:none;margin:1rem 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer}
+
+/* Canvas */
+canvas{border-radius:var(--radius);display:block;max-width:100%}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:.6rem .8rem;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--accent);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}
+
+/* Simulator */
+.sim-display{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.8rem;margin:1rem 0}
+.sim-stat{background:var(--bg3);padding:.8rem;border-radius:8px;text-align:center}
+.sim-stat .label{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.sim-stat .value{font-size:1.4rem;font-weight:700;margin-top:.2rem}
+.sim-log{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.8rem;max-height:200px;overflow-y:auto;font-size:.78rem;color:var(--text2);margin:1rem 0}
+.sim-log div{padding:.2rem 0;border-bottom:1px solid var(--border)}
+.sim-log .buy{color:var(--green)}
+.sim-log .sell{color:var(--red)}
+
+/* Regime comparison */
+.regime-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1rem 0}
+@media(max-width:700px){.regime-grid{grid-template-columns:1fr}}
+
+/* Tool connections */
+.tool-grid{display:grid;gap:.6rem;margin:1rem 0}
+.tool-card{display:flex;gap:.8rem;padding:1rem;background:var(--bg3);border-radius:8px;border:1px solid var(--border)}
+.tool-icon{font-size:1.5rem;min-width:2rem;text-align:center}
+.tool-card h4{font-size:.9rem;color:var(--accent);margin-bottom:.3rem}
+.tool-card p{font-size:.82rem;color:var(--text2);line-height:1.5}
+
+/* Cheat sheet */
+.cheat-step{display:flex;gap:1rem;padding:1rem;border-left:2px solid var(--accent);margin:.5rem 0;background:var(--bg2);border-radius:0 8px 8px 0}
+.cheat-num{font-size:1.5rem;font-weight:700;color:var(--accent);min-width:2rem}
+
+/* Key insight */
+.insight{background:linear-gradient(135deg,#22d3ee11,#a78bfa11);border:1px solid var(--accent);border-radius:var(--radius);padding:1.2rem;margin:1rem 0;font-style:italic;color:var(--text)}
+.insight::before{content:'💡 ';font-style:normal}
+
+/* Diagram labels */
+.diagram-container{position:relative;margin:1.5rem 0}
+
+/* Responsive */
+@media(max-width:768px){
+  #sidebar{transform:translateX(-100%)}
+  #sidebar.open{transform:none}
+  #menu-toggle{display:block}
+  main{margin-left:0;padding:2rem 1.2rem 4rem}
+  .regime-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="progress" style="width:0%"></div>
+<button id="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+
+<nav id="sidebar">
+  <div class="logo">GEX<span>Gamma Exposure Guide</span></div>
+  <div class="nav-item" data-to="s1"><span class="num">01</span>What is GEX?</div>
+  <div class="nav-item" data-to="s2"><span class="num">02</span>Options Fundamentals</div>
+  <div class="nav-item" data-to="s3"><span class="num">03</span>Market Makers</div>
+  <div class="nav-item" data-to="s4"><span class="num">04</span>The Greeks</div>
+  <div class="nav-item" data-to="s5"><span class="num">05</span>Delta Hedging</div>
+  <div class="nav-item" data-to="s6"><span class="num">06</span>Gamma → Regime</div>
+  <div class="nav-item" data-to="s7"><span class="num">07</span>Call Resistance</div>
+  <div class="nav-item" data-to="s8"><span class="num">08</span>Put Support</div>
+  <div class="nav-item" data-to="s9"><span class="num">09</span>The Asymmetry</div>
+  <div class="nav-item" data-to="s10"><span class="num">10</span>Cheat Sheet</div>
+</nav>
+
+<main>
+
+<!-- ============ SECTION 1: WHAT IS GEX ============ -->
+<section id="s1">
+<h1>What is Gamma Exposure (GEX)?</h1>
+<p style="color:var(--text2);margin:1rem 0 1.5rem">The forward-looking lens that explains <em>why</em> price behaves the way it does.</p>
+
+<div class="card card-accent">
+<h3>The Road Ahead Analogy</h3>
+<p style="color:var(--text2)">Traditional technical analysis is like driving by looking in the <strong>rearview mirror</strong> — you see where price has been. GEX is like looking through the <strong>windshield</strong> — it reveals the terrain ahead.</p>
+<p style="color:var(--text2);margin-top:.8rem">Options market makers must hedge their positions. Their hedging activity creates <strong>mechanical, predictable flows</strong> in the underlying. GEX maps out where these flows are concentrated.</p>
+</div>
+
+<div class="card">
+<h3>Why It Matters for Intraday</h3>
+<p style="color:var(--text2)">GEX answers the key question every session: <strong>Are we in a mean-reverting or trending environment?</strong></p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+  <div style="padding:1rem;background:var(--bg3);border-radius:8px;border-top:3px solid var(--green)">
+    <div style="color:var(--green);font-weight:700;margin-bottom:.3rem">Positive GEX</div>
+    <div style="font-size:.85rem;color:var(--text2)">Mean reversion. Dealers dampen moves. Fade the extremes. Rotational profiles.</div>
+  </div>
+  <div style="padding:1rem;background:var(--bg3);border-radius:8px;border-top:3px solid var(--red)">
+    <div style="color:var(--red);font-weight:700;margin-bottom:.3rem">Negative GEX</div>
+    <div style="font-size:.85rem;color:var(--text2)">Trending. Dealers amplify moves. Follow momentum. Trend day profiles.</div>
+  </div>
+</div>
+</div>
+
+<div class="insight">GEX doesn't predict direction — it predicts the <strong>character</strong> of price movement. That's more valuable for an intraday trader than any directional forecast.</div>
+</section>
+
+<!-- ============ SECTION 2: OPTIONS FUNDAMENTALS ============ -->
+<section id="s2">
+<h2>Options Fundamentals</h2>
+<p style="color:var(--text2);margin-bottom:1rem">Expand if you need a refresher on the building blocks.</p>
+
+<div class="collapsible" onclick="toggleCollapse(this)">
+  <span>Calls & Puts — The Building Blocks</span>
+</div>
+<div class="collapsible-body">
+<div class="collapsible-inner">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+  <div class="card card-green" style="margin:0">
+    <h4 style="color:var(--green)">CALL Option</h4>
+    <p style="font-size:.85rem;color:var(--text2)"><strong>Right to BUY</strong> 100 shares at the strike price, before expiration.</p>
+    <p style="font-size:.85rem;color:var(--text2);margin-top:.5rem">Buyer profits when price goes <strong>above</strong> strike + premium paid.</p>
+  </div>
+  <div class="card card-red" style="margin:0">
+    <h4 style="color:var(--red)">PUT Option</h4>
+    <p style="font-size:.85rem;color:var(--text2)"><strong>Right to SELL</strong> 100 shares at the strike price, before expiration.</p>
+    <p style="font-size:.85rem;color:var(--text2);margin-top:.5rem">Buyer profits when price goes <strong>below</strong> strike − premium paid.</p>
+  </div>
+</div>
+<div style="margin-top:1.5rem">
+  <h4>Payoff Diagrams</h4>
+  <canvas id="payoffCanvas" width="700" height="280" style="width:100%;margin-top:.5rem"></canvas>
+  <div style="display:flex;gap:.5rem;margin-top:.5rem">
+    <button onclick="drawPayoff('longCall')" class="btn-green">Long Call</button>
+    <button onclick="drawPayoff('longPut')" class="btn-red">Long Put</button>
+    <button onclick="drawPayoff('shortCall')">Short Call</button>
+    <button onclick="drawPayoff('shortPut')">Short Put</button>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="collapsible" onclick="toggleCollapse(this)">
+  <span>Strike, Expiration & Premium</span>
+</div>
+<div class="collapsible-body">
+<div class="collapsible-inner">
+<table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><strong>Strike Price</strong></td><td style="color:var(--text2)">The price at which the option can be exercised. This is where the action happens for GEX.</td></tr>
+<tr><td><strong>Expiration</strong></td><td style="color:var(--text2)">When the contract dies. Options near expiration have the highest gamma — critical for GEX.</td></tr>
+<tr><td><strong>Premium</strong></td><td style="color:var(--text2)">The price of the option. Made up of intrinsic value + time value (theta + IV).</td></tr>
+</table>
+</div>
+</div>
+
+<div class="collapsible" onclick="toggleCollapse(this)">
+  <span>Moneyness — ITM / ATM / OTM</span>
+</div>
+<div class="collapsible-body">
+<div class="collapsible-inner">
+<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem">
+  <span class="tag tag-green">ITM = In The Money (has intrinsic value)</span>
+  <span class="tag tag-yellow">ATM = At The Money (strike ≈ current price)</span>
+  <span class="tag tag-red">OTM = Out of The Money (no intrinsic value)</span>
+</div>
+<p style="font-size:.85rem;color:var(--text2)"><strong>For GEX:</strong> ATM options have the highest gamma. As expiration nears, gamma becomes extremely concentrated at ATM strikes — this is where the strongest GEX effects occur.</p>
+</div>
+</div>
+</section>
+
+<!-- ============ SECTION 3: MARKET MAKERS ============ -->
+<section id="s3">
+<h2>Market Makers & Dealers</h2>
+<p style="color:var(--text2);margin-bottom:1.5rem">Understanding who's on the other side of your trade — and why they <em>must</em> hedge.</p>
+
+<div class="card card-accent">
+<h3>The Mirror Image</h3>
+<p style="color:var(--text2)">When you buy a call, the market maker <strong>sells</strong> it to you. They don't have an opinion on direction — they're providing liquidity. But by selling that call, they've inherited the <strong>mirror image</strong> of your Greeks.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+  <div style="padding:.8rem;background:var(--bg3);border-radius:8px">
+    <div style="font-size:.8rem;color:var(--text3)">YOU (Long Call)</div>
+    <div style="color:var(--green);font-weight:600">+Delta, +Gamma, −Theta, +Vega</div>
+  </div>
+  <div style="padding:.8rem;background:var(--bg3);border-radius:8px">
+    <div style="font-size:.8rem;color:var(--text3)">DEALER (Short Call)</div>
+    <div style="color:var(--red);font-weight:600">−Delta, −Gamma, +Theta, −Vega</div>
+  </div>
+</div>
+</div>
+
+<div class="card">
+<h3>MM vs Dealer — A Distinction</h3>
+<table>
+<tr><th></th><th>Market Maker</th><th>Dealer</th></tr>
+<tr><td style="color:var(--text3)">Role</td><td style="color:var(--text2)">Obligated to quote bid/ask</td><td style="color:var(--text2)">Selective — trades when profitable</td></tr>
+<tr><td style="color:var(--text3)">Risk</td><td style="color:var(--text2)">Must manage inherited risk</td><td style="color:var(--text2)">Chooses which risk to take</td></tr>
+<tr><td style="color:var(--text3)">Hedging</td><td style="color:var(--text2)">Continuous, mechanical</td><td style="color:var(--text2)">Strategic, discretionary</td></tr>
+</table>
+<p style="font-size:.82rem;color:var(--text3);margin-top:.8rem">For GEX analysis, we often use "dealer" generically — the key insight is that their hedging creates predictable flows in the underlying.</p>
+</div>
+
+<div class="insight">Dealers don't want directional risk. They want to collect premium (theta). Their entire business model depends on neutralizing delta — and that's exactly what creates the GEX effect.</div>
+</section>
+
+<!-- ============ SECTION 4: THE GREEKS ============ -->
+<section id="s4">
+<h2>The Greeks That Matter</h2>
+<p style="color:var(--text2);margin-bottom:1.5rem">Delta and Gamma are the engine of GEX. Understand these two deeply.</p>
+
+<div class="card card-accent">
+<h3>Delta — Directional Exposure</h3>
+<p style="color:var(--text2)">How much the option price changes per $1 move in the underlying. Ranges from 0 to 1 (calls) or 0 to −1 (puts).</p>
+<p style="color:var(--text2);margin-top:.5rem">Delta follows an <strong>S-curve</strong> (sigmoid): near 0 for deep OTM, ~0.5 at ATM, near 1 for deep ITM.</p>
+</div>
+
+<div class="card card-purple">
+<h3>Gamma — The Accelerator</h3>
+<p style="color:var(--text2)">How fast delta changes. Gamma is highest <strong>at the strike</strong> and forms a <strong>bell curve</strong>. This is the Greek that drives everything in GEX.</p>
+<p style="color:var(--text2);margin-top:.5rem">High gamma = delta changes rapidly = dealers must hedge aggressively = larger flows in the underlying.</p>
+</div>
+
+<div class="diagram-container">
+<h4 style="margin-bottom:.5rem">Interactive: Delta & Gamma vs. Underlying Price</h4>
+<p style="font-size:.8rem;color:var(--text3);margin-bottom:.5rem">Strike = $100. Move the slider to see how delta and gamma change.</p>
+<canvas id="greeksCanvas" width="700" height="300" style="width:100%"></canvas>
+<div style="display:flex;align-items:center;gap:1rem;margin-top:.5rem">
+  <span style="font-size:.85rem;color:var(--text3)">Underlying: $</span>
+  <input type="range" id="greeksSlider" min="80" max="120" value="100" step="0.5" oninput="drawGreeks(this.value)" style="flex:1">
+  <span id="greeksPrice" style="color:var(--accent);font-weight:700">100.0</span>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem">
+<div class="card" style="margin:0">
+<h4 style="color:var(--yellow)">Theta — Time Decay</h4>
+<p style="font-size:.85rem;color:var(--text2)">Options lose value daily. Dealers who are short options <em>collect</em> theta — it's their profit. This is why they hedge delta rather than closing positions.</p>
+</div>
+<div class="card" style="margin:0">
+<h4 style="color:var(--orange)">Vega / IV — Volatility</h4>
+<p style="font-size:.85rem;color:var(--text2)">Implied volatility reflects market's expected future movement (connected to Brownian motion). High IV = expensive options = more premium for dealers = potentially more hedging flow.</p>
+</div>
+</div>
+</section>
+
+<!-- ============ SECTION 5: DELTA HEDGING ============ -->
+<section id="s5">
+<h2>Delta Hedging in Practice</h2>
+<p style="color:var(--text2);margin-bottom:1rem">This is the mechanism that creates GEX effects. Step through it interactively.</p>
+
+<div class="card card-accent">
+<h3>🎮 Delta Hedging Simulator</h3>
+<p style="font-size:.85rem;color:var(--text2);margin-bottom:1rem">Scenario: A dealer has <strong>sold 100 call contracts</strong> (10,000 shares notional) at <strong>strike $90</strong>. They must stay delta-neutral.</p>
+
+<div class="sim-display">
+  <div class="sim-stat"><div class="label">Underlying</div><div class="value" id="sim-price" style="color:var(--accent)">$90.00</div></div>
+  <div class="sim-stat"><div class="label">Option Delta</div><div class="value" id="sim-delta">0.50</div></div>
+  <div class="sim-stat"><div class="label">Position Delta</div><div class="value" id="sim-posdelta" style="color:var(--yellow)">−5,000</div></div>
+  <div class="sim-stat"><div class="label">Shares Held</div><div class="value" id="sim-shares" style="color:var(--green)">5,000</div></div>
+  <div class="sim-stat"><div class="label">Net Exposure</div><div class="value" id="sim-net">0</div></div>
+</div>
+
+<div style="display:flex;gap:.8rem;margin:1rem 0;flex-wrap:wrap">
+  <button class="btn-green" onclick="simMove(1)">📈 Price +$1</button>
+  <button class="btn-red" onclick="simMove(-1)">📉 Price −$1</button>
+  <button onclick="simReset()" style="margin-left:auto">↺ Reset</button>
+</div>
+
+<div class="sim-log" id="sim-log">
+  <div>📋 Dealer sold 100 calls @ strike $90. Current price: $90. Delta ≈ 0.50.</div>
+  <div>📋 To neutralize −5,000 delta → bought 5,000 shares.</div>
+</div>
+</div>
+
+<div class="insight">Notice the pattern: when price rises, the dealer <strong>buys more shares</strong> (chasing the move). When it falls, they <strong>sell shares</strong> (also chasing). A short-gamma dealer <strong>amplifies</strong> price movement. This is the engine of trending regimes.</div>
+
+<div class="card">
+<h3>What if the dealer was LONG gamma?</h3>
+<p style="font-size:.85rem;color:var(--text2)">Flip it. A dealer who <em>bought</em> calls has <strong>positive gamma</strong>. When price rises, their delta increases and they <strong>sell shares</strong> to stay neutral. When price falls, they <strong>buy shares</strong>. They're <strong>dampening</strong> moves — selling into rallies, buying dips. This creates mean reversion.</p>
+</div>
+</section>
+
+<!-- ============ SECTION 6: GAMMA REGIME ============ -->
+<section id="s6">
+<h2 style="font-size:1.8rem">⚡ Gamma Sign → Market Regime</h2>
+<p style="color:var(--text2);margin-bottom:.5rem">This is the single most important concept for your trading.</p>
+<span class="tag tag-accent">KEY SECTION</span>
+
+<div style="margin:1.5rem 0">
+<div class="toggle-group">
+  <button class="toggle-btn active" onclick="showRegime('pos',this)">🟢 Positive Gamma</button>
+  <button class="toggle-btn" onclick="showRegime('neg',this)">🔴 Negative Gamma</button>
+  <button class="toggle-btn" onclick="showRegime('both',this)">⚖️ Compare</button>
+</div>
+</div>
+
+<div id="regime-pos">
+<div class="card card-green">
+<h3 style="color:var(--green)">🟢 Positive Gamma — Mean Reversion</h3>
+<p style="color:var(--text2)">Dealers are <strong>long gamma</strong>. Net GEX is positive.</p>
+<ul style="color:var(--text2);font-size:.9rem;margin-top:.8rem;padding-left:1.2rem">
+  <li>Dealers <strong>sell into rallies</strong> and <strong>buy into dips</strong></li>
+  <li>Volatility is <strong>compressed</strong></li>
+  <li>Price gravitates toward high-GEX strikes</li>
+  <li>Ranges hold, breakouts fail</li>
+  <li><strong>Strategy: Fade extremes, trade rotations</strong></li>
+</ul>
+<canvas id="regimePosCanvas" width="600" height="180" style="width:100%;margin-top:1rem"></canvas>
+</div>
+</div>
+
+<div id="regime-neg" style="display:none">
+<div class="card card-red">
+<h3 style="color:var(--red)">🔴 Negative Gamma — Trending</h3>
+<p style="color:var(--text2)">Dealers are <strong>short gamma</strong>. Net GEX is negative.</p>
+<ul style="color:var(--text2);font-size:.9rem;margin-top:.8rem;padding-left:1.2rem">
+  <li>Dealers <strong>buy into rallies</strong> and <strong>sell into dips</strong></li>
+  <li>Volatility is <strong>amplified</strong></li>
+  <li>Price accelerates away from strikes</li>
+  <li>Breakouts follow through, ranges fail</li>
+  <li><strong>Strategy: Trade breakouts, follow momentum</strong></li>
+</ul>
+<canvas id="regimeNegCanvas" width="600" height="180" style="width:100%;margin-top:1rem"></canvas>
+</div>
+</div>
+
+<div id="regime-both" style="display:none">
+<div class="regime-grid">
+  <div class="card card-green" style="margin:0">
+    <h4 style="color:var(--green)">🟢 POSITIVE GAMMA</h4>
+    <ul style="color:var(--text2);font-size:.82rem;padding-left:1rem;margin-top:.5rem">
+      <li>Dealers sell rallies, buy dips</li>
+      <li>Volatility compressed</li>
+      <li>Price pinned to GEX levels</li>
+      <li>Fade extremes</li>
+    </ul>
+  </div>
+  <div class="card card-red" style="margin:0">
+    <h4 style="color:var(--red)">🔴 NEGATIVE GAMMA</h4>
+    <ul style="color:var(--text2);font-size:.82rem;padding-left:1rem;margin-top:.5rem">
+      <li>Dealers buy rallies, sell dips</li>
+      <li>Volatility amplified</li>
+      <li>Price accelerates through levels</li>
+      <li>Follow momentum</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<h3 style="margin-top:2.5rem;margin-bottom:1rem;color:var(--accent)">🔧 Connect to Your Tools</h3>
+
+<div class="tool-grid">
+  <div class="tool-card">
+    <div class="tool-icon">📊</div>
+    <div>
+      <h4>TPO Profile</h4>
+      <p><strong style="color:var(--green)">+Gamma:</strong> Expect value area to hold. Rotational, balanced profiles. Multiple distributions around GEX levels. <strong style="color:var(--red)">−Gamma:</strong> Single prints, elongated profiles, trend days. Price escapes initial balance.</p>
+    </div>
+  </div>
+  <div class="tool-card">
+    <div class="tool-icon">📈</div>
+    <div>
+      <h4>Volume Profile</h4>
+      <p><strong style="color:var(--green)">+Gamma:</strong> Price attracted to VPOC and HVNs. GEX levels often align with volume nodes. <strong style="color:var(--red)">−Gamma:</strong> Price slices through LVNs easily. Volume nodes provide less support.</p>
+    </div>
+  </div>
+  <div class="tool-card">
+    <div class="tool-icon">🔍</div>
+    <div>
+      <h4>Footprint Charts</h4>
+      <p><strong style="color:var(--green)">+Gamma:</strong> Look for absorption patterns at GEX levels — stacked bids/offers holding. <strong style="color:var(--red)">−Gamma:</strong> Aggressive initiative buying/selling. Footprint shows imbalance and delta divergence.</p>
+    </div>
+  </div>
+  <div class="tool-card">
+    <div class="tool-icon">📋</div>
+    <div>
+      <h4>DOM (Depth of Market)</h4>
+      <p><strong style="color:var(--green)">+Gamma:</strong> Large resting orders near GEX levels (dealer hedging visible). DOM thickens. <strong style="color:var(--red)">−Gamma:</strong> DOM thins out rapidly. Resting orders get pulled. Iceberg orders less reliable.</p>
+    </div>
+  </div>
+  <div class="tool-card">
+    <div class="tool-icon">⚖️</div>
+    <div>
+      <h4>Fair Value Concept</h4>
+      <p><strong style="color:var(--green)">+Gamma:</strong> GEX levels act as mechanical fair value anchors. Dealers actively push price toward fair value. <strong style="color:var(--red)">−Gamma:</strong> Fair value gaps emerge. Price overshoots fair value as dealer hedging amplifies moves.</p>
+    </div>
+  </div>
+  <div class="tool-card">
+    <div class="tool-icon">🕳️</div>
+    <div>
+      <h4>Low Volume Nodes</h4>
+      <p><strong style="color:var(--green)">+Gamma:</strong> LVNs act as normal rejection zones. Dealer hedging reinforces the edges. <strong style="color:var(--red)">−Gamma:</strong> LVNs become <strong>highways for price acceleration</strong>. Once price enters an LVN in negative gamma, expect a fast move through.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ============ SECTION 7: CALL RESISTANCE ============ -->
+<section id="s7">
+<h2>Call Resistance</h2>
+<p style="color:var(--text2);margin-bottom:1.5rem">Why price decelerates and often reverses at major call walls.</p>
+
+<div class="card card-green">
+<h3>Three Drivers of Rejection</h3>
+<div style="display:grid;gap:1rem;margin-top:1rem">
+  <div style="display:flex;gap:.8rem;padding:.8rem;background:var(--bg3);border-radius:8px">
+    <div style="color:var(--accent);font-size:1.5rem;font-weight:700">1</div>
+    <div><h4 style="font-size:.9rem">Positive Gamma Hedging</h4><p style="font-size:.82rem;color:var(--text2)">As price rises into a call wall, dealers who are long those calls see delta increase. To stay neutral, they <strong>sell shares</strong> into the rally. Massive, mechanical selling pressure.</p></div>
+  </div>
+  <div style="display:flex;gap:.8rem;padding:.8rem;background:var(--bg3);border-radius:8px">
+    <div style="color:var(--accent);font-size:1.5rem;font-weight:700">2</div>
+    <div><h4 style="font-size:.9rem">Profit-Taking by Call Holders</h4><p style="font-size:.82rem;color:var(--text2)">Retail and institutional call holders sell to lock in profits as their calls go ITM. This selling unwinds open interest, reducing GEX at that level.</p></div>
+  </div>
+  <div style="display:flex;gap:.8rem;padding:.8rem;background:var(--bg3);border-radius:8px">
+    <div style="color:var(--accent);font-size:1.5rem;font-weight:700">3</div>
+    <div><h4 style="font-size:.9rem">Behavioral / TA Alignment</h4><p style="font-size:.82rem;color:var(--text2)">Call walls often align with prior highs and round numbers. TA traders see "resistance" for chart reasons. The real driver is options mechanics — but TA works <em>without understanding why</em>.</p></div>
+  </div>
+</div>
+</div>
+
+<div class="card card-yellow">
+<h3>Breakout Mechanics — The Gamma Flip</h3>
+<p style="font-size:.9rem;color:var(--text2)">If price pushes <em>through</em> a call wall, the dynamics invert. Those calls go deep ITM (delta → 1, gamma → 0). The hedging pressure that was capping price <strong>disappears</strong>. Meanwhile, the next strike's gamma kicks in. If there's no call wall above, you can get a <strong>gamma squeeze</strong> — the mechanical ceiling is removed.</p>
+</div>
+
+<canvas id="callResCanvas" width="700" height="220" style="width:100%;margin:1rem 0"></canvas>
+</section>
+
+<!-- ============ SECTION 8: PUT SUPPORT ============ -->
+<section id="s8">
+<h2>Put Support</h2>
+<p style="color:var(--text2);margin-bottom:1.5rem">The mechanics are different — and critically, <strong>asymmetric</strong> to call resistance.</p>
+
+<div class="card card-red">
+<h3>Bounce Mechanics</h3>
+<p style="font-size:.9rem;color:var(--text2)">Price <strong>accelerates</strong> into put support (negative gamma environment as dealers are short puts). As price crashes toward a put wall:</p>
+<ol style="color:var(--text2);font-size:.9rem;padding-left:1.2rem;margin-top:.5rem">
+  <li>Dealers short puts see delta increase → must <strong>sell shares</strong> to hedge (amplifying the drop)</li>
+  <li>Puts go ITM → holders <strong>monetize</strong> (sell puts for profit)</li>
+  <li>Put selling by holders = dealers <strong>buy back</strong> their hedge shares</li>
+  <li>This buying pressure → bounce</li>
+</ol>
+</div>
+
+<div class="card card-yellow">
+<h3>Breakdown Mechanics</h3>
+<p style="font-size:.9rem;color:var(--text2)">If the put wall doesn't hold — if selling overwhelms the monetization bounce — then those puts go deep ITM and the next put wall becomes the target. In a persistent negative gamma environment, this creates <strong>cascading breakdowns</strong> as each put wall fails.</p>
+</div>
+
+<div class="insight">The key asymmetry: price <strong>decelerates</strong> into call resistance (positive gamma braking) but <strong>accelerates</strong> into put support (negative gamma amplifying). This is why crashes are fast and recoveries are slow.</div>
+</section>
+
+<!-- ============ SECTION 9: THE ASYMMETRY ============ -->
+<section id="s9">
+<h2>The Asymmetry</h2>
+<p style="color:var(--text2);margin-bottom:1.5rem">The most important structural insight for intraday trading.</p>
+
+<canvas id="asymCanvas" width="700" height="300" style="width:100%;margin:1rem 0"></canvas>
+
+<div class="regime-grid">
+  <div class="card card-green" style="margin:0">
+    <h4 style="color:var(--green)">Approaching Call Resistance ↑</h4>
+    <ul style="color:var(--text2);font-size:.85rem;padding-left:1rem;margin-top:.5rem">
+      <li>Price <strong>decelerates</strong></li>
+      <li>Positive gamma = dealers selling</li>
+      <li>Volume often decreases</li>
+      <li>TPO: prints slow down, p-shape</li>
+      <li>Footprint: absorption, delta flattening</li>
+    </ul>
+  </div>
+  <div class="card card-red" style="margin:0">
+    <h4 style="color:var(--red)">Approaching Put Support ↓</h4>
+    <ul style="color:var(--text2);font-size:.85rem;padding-left:1rem;margin-top:.5rem">
+      <li>Price <strong>accelerates</strong></li>
+      <li>Negative gamma = dealers selling</li>
+      <li>Volume spikes</li>
+      <li>TPO: single prints, elongation, b-shape</li>
+      <li>Footprint: initiative selling, imbalance</li>
+    </ul>
+  </div>
+</div>
+
+<div class="insight" style="margin-top:1.5rem">"Gamma determines <strong>how price approaches</strong> a level. Option flow determines <strong>whether the level holds</strong>."</div>
+</section>
+
+<!-- ============ SECTION 10: CHEAT SHEET ============ -->
+<section id="s10">
+<h2>🗂️ Practical Integration Cheat Sheet</h2>
+<p style="color:var(--text2);margin-bottom:1.5rem">Your daily workflow combining GEX with your existing tools.</p>
+
+<div class="cheat-step"><div class="cheat-num">1</div><div><h4>Before the Open</h4><p style="font-size:.85rem;color:var(--text2)">Check GEX levels. Identify the major <strong>call walls</strong> (resistance) and <strong>put supports</strong>. Note the gamma flip level. Determine: is overall GEX positive or negative?</p></div></div>
+
+<div class="cheat-step"><div class="cheat-num">2</div><div><h4>Overlay Profiles</h4><p style="font-size:.85rem;color:var(--text2)">Plot GEX levels on your <strong>TPO developing profile</strong> and <strong>volume profile</strong>. Look for confluence: GEX levels near VPOC, HVNs, value area edges, or prior session references.</p></div></div>
+
+<div class="cheat-step"><div class="cheat-num">3</div><div><h4>At GEX Levels: Read the Tape</h4><p style="font-size:.85rem;color:var(--text2)">When price reaches a GEX level, use <strong>footprint charts</strong> for confirmation. In positive gamma: look for <strong>absorption</strong> (level holds). In negative gamma: look for <strong>initiative flow</strong> (level breaks).</p></div></div>
+
+<div class="cheat-step"><div class="cheat-num">4</div><div><h4>Watch the DOM</h4><p style="font-size:.85rem;color:var(--text2)">Use DOM to confirm dealer hedging flow. In positive gamma: <strong>thick resting orders</strong> at GEX levels. In negative gamma: DOM <strong>thins out</strong> — a warning sign of acceleration.</p></div></div>
+
+<div class="cheat-step"><div class="cheat-num">5</div><div><h4>Execute Your Strategy</h4><p style="font-size:.85rem;color:var(--text2)">
+<strong style="color:var(--green)">Positive gamma?</strong> → Fade extremes. Trade rotations. Lean on GEX levels as support/resistance. Mean reversion setups.<br>
+<strong style="color:var(--red)">Negative gamma?</strong> → Trade breakouts. Follow momentum. Don't fade. LVNs are acceleration zones. Respect the trend.</p></div></div>
+
+<div class="card card-accent" style="margin-top:2rem">
+<h3>Quick Reference</h3>
+<table>
+<tr><th>Signal</th><th style="color:var(--green)">+Gamma</th><th style="color:var(--red)">−Gamma</th></tr>
+<tr><td style="color:var(--text3)">Strategy</td><td style="color:var(--text2)">Fade / Rotation</td><td style="color:var(--text2)">Breakout / Momentum</td></tr>
+<tr><td style="color:var(--text3)">TPO</td><td style="color:var(--text2)">Balanced, rotational</td><td style="color:var(--text2)">Trend, single prints</td></tr>
+<tr><td style="color:var(--text3)">Volume Profile</td><td style="color:var(--text2)">Price → VPOC/HVN</td><td style="color:var(--text2)">Price slices LVNs</td></tr>
+<tr><td style="color:var(--text3)">Footprint</td><td style="color:var(--text2)">Absorption</td><td style="color:var(--text2)">Initiative</td></tr>
+<tr><td style="color:var(--text3)">DOM</td><td style="color:var(--text2)">Thick, resting</td><td style="color:var(--text2)">Thin, pulling</td></tr>
+<tr><td style="color:var(--text3)">Fair Value</td><td style="color:var(--text2)">Anchored</td><td style="color:var(--text2)">Gaps / overshoot</td></tr>
+<tr><td style="color:var(--text3)">LVNs</td><td style="color:var(--text2)">Normal rejection</td><td style="color:var(--text2)">Acceleration highways</td></tr>
+<tr><td style="color:var(--text3)">At call wall</td><td style="color:var(--text2)">Deceleration, fade</td><td style="color:var(--text2)">If broken → squeeze</td></tr>
+<tr><td style="color:var(--text3)">At put wall</td><td style="color:var(--text2)">Bounce likely</td><td style="color:var(--text2)">Acceleration into it</td></tr>
+</table>
+</div>
+
+<div style="text-align:center;margin-top:3rem;padding:2rem;color:var(--text3);font-size:.85rem">
+  <p>Built for intraday traders. Based on FractalFlow concepts.</p>
+  <p style="margin-top:.3rem">Gamma determines the character of the market. Know it before you trade.</p>
+</div>
+</section>
+
+</main>
+
+<script>
+// ======== NAV & SCROLL ========
+const navItems=document.querySelectorAll('.nav-item');
+const sections=document.querySelectorAll('section');
+navItems.forEach(n=>n.addEventListener('click',()=>{
+  document.getElementById(n.dataset.to).scrollIntoView({behavior:'smooth'});
+  document.getElementById('sidebar').classList.remove('open');
+}));
+
+function updateNav(){
+  let cur='';
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<200)cur=s.id});
+  navItems.forEach(n=>{n.classList.toggle('active',n.dataset.to===cur)});
+  // progress
+  const h=document.documentElement.scrollHeight-window.innerHeight;
+  document.getElementById('progress').style.width=(window.scrollY/h*100)+'%';
+  // reveal
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<window.innerHeight*0.85)s.classList.add('visible')});
+}
+window.addEventListener('scroll',updateNav);
+updateNav();
+
+// ======== COLLAPSIBLE ========
+function toggleCollapse(el){
+  el.classList.toggle('open');
+  const body=el.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// ======== PAYOFF DIAGRAM ========
+function drawPayoff(type){
+  const c=document.getElementById('payoffCanvas'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,mid=W/2,midy=H/2+20;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#111827';ctx.fillRect(0,0,W,H);
+  // axes
+  ctx.strokeStyle='#334155';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(40,midy);ctx.lineTo(W-20,midy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(mid,20);ctx.lineTo(mid,H-20);ctx.stroke();
+  // labels
+  ctx.fillStyle='#64748b';ctx.font='12px monospace';
+  ctx.fillText('Stock Price →',W-120,midy+18);
+  ctx.fillText('P/L',mid+8,32);
+  ctx.fillText('Strike',mid-15,H-5);
+  ctx.fillText('0',mid+6,midy+16);
+  // payoff line
+  ctx.lineWidth=3;ctx.beginPath();
+  const premium=30;
+  if(type==='longCall'){
+    ctx.strokeStyle='#34d399';
+    ctx.moveTo(40,midy+premium);ctx.lineTo(mid,midy+premium);ctx.lineTo(W-20,midy+premium-(W-20-mid));
+    ctx.fillStyle='#34d39944';ctx.fill();
+  } else if(type==='longPut'){
+    ctx.strokeStyle='#f87171';
+    ctx.moveTo(40,midy+premium-(mid-40));ctx.lineTo(mid,midy+premium);ctx.lineTo(W-20,midy+premium);
+  } else if(type==='shortCall'){
+    ctx.strokeStyle='#fb923c';
+    ctx.moveTo(40,midy-premium);ctx.lineTo(mid,midy-premium);ctx.lineTo(W-20,midy-premium+(W-20-mid));
+  } else {
+    ctx.strokeStyle='#a78bfa';
+    ctx.moveTo(40,midy-premium+(mid-40));ctx.lineTo(mid,midy-premium);ctx.lineTo(W-20,midy-premium);
+  }
+  ctx.stroke();
+  // legend
+  const labels={longCall:'Long Call (Buyer)',longPut:'Long Put (Buyer)',shortCall:'Short Call (Seller)',shortPut:'Short Put (Seller)'};
+  ctx.fillStyle=ctx.strokeStyle;ctx.font='bold 13px monospace';ctx.fillText(labels[type],50,30);
+}
+drawPayoff('longCall');
+
+// ======== GREEKS INTERACTIVE ========
+function normalPDF(x,mu,sigma){return Math.exp(-0.5*((x-mu)/sigma)**2)/(sigma*Math.sqrt(2*Math.PI))}
+function cumNorm(x){const t=1/(1+0.2316419*Math.abs(x)),d=0.3989422802*Math.exp(-x*x/2),p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.8212560+t*1.3302744))));return x>0?1-p:p}
+
+function drawGreeks(price){
+  price=parseFloat(price);
+  document.getElementById('greeksPrice').textContent=price.toFixed(1);
+  const c=document.getElementById('greeksCanvas'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#111827';ctx.fillRect(0,0,W,H);
+
+  const strike=100,sigma=10,pad=40;
+  const toX=v=>(v-80)/(120-80)*(W-2*pad)+pad;
+  const dH=H*0.45;
+
+  // grid
+  ctx.strokeStyle='#1e293b';ctx.lineWidth=1;
+  for(let p=80;p<=120;p+=5){const x=toX(p);ctx.beginPath();ctx.moveTo(x,10);ctx.lineTo(x,H-10);ctx.stroke()}
+
+  // Delta curve
+  ctx.strokeStyle='#22d3ee';ctx.lineWidth=2.5;ctx.beginPath();
+  for(let v=80;v<=120;v+=0.5){
+    const d1=(Math.log(v/strike)+0.5*0.04)/(0.2*1);
+    const delta=cumNorm(d1);
+    const x=toX(v),y=H-20-delta*(dH);
+    v===80?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Gamma curve
+  ctx.strokeStyle='#a78bfa';ctx.lineWidth=2.5;ctx.beginPath();
+  for(let v=80;v<=120;v+=0.5){
+    const d1=(Math.log(v/strike)+0.5*0.04)/(0.2*1);
+    const gamma=normalPDF(d1,0,1)/(v*0.2);
+    const x=toX(v),y=H-20-gamma*v*5*(dH);
+    v===80?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Current price marker
+  const cx=toX(price);
+  ctx.strokeStyle='#fbbf24';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(cx,10);ctx.lineTo(cx,H-10);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels
+  ctx.font='bold 12px monospace';
+  ctx.fillStyle='#22d3ee';ctx.fillText('Delta',W-75,H-60);
+  ctx.fillStyle='#a78bfa';ctx.fillText('Gamma',W-75,H-40);
+  ctx.fillStyle='#fbbf24';ctx.fillText('Price: $'+price.toFixed(1),cx-40,20);
+  ctx.fillStyle='#64748b';ctx.font='11px monospace';
+  ctx.fillText('$80',toX(80)-8,H-5);ctx.fillText('$100 (Strike)',toX(100)-30,H-5);ctx.fillText('$120',toX(120)-10,H-5);
+
+  // Values at current price
+  const d1c=(Math.log(price/strike)+0.5*0.04)/(0.2*1);
+  const deltaVal=cumNorm(d1c);
+  const gammaVal=normalPDF(d1c,0,1)/(price*0.2);
+  ctx.fillStyle='#22d3ee';ctx.font='13px monospace';ctx.fillText('δ = '+deltaVal.toFixed(3),pad,25);
+  ctx.fillStyle='#a78bfa';ctx.fillText('γ = '+gammaVal.toFixed(4),pad,42);
+}
+drawGreeks(100);
+
+// ======== DELTA HEDGING SIMULATOR ========
+let sim={price:90,shares:5000,strike:90,contracts:100,mult:100};
+function simDelta(price){
+  const d1=(Math.log(price/sim.strike)+0.5*0.04)/(0.2*Math.sqrt(0.1));
+  return cumNorm(d1);
+}
+function simUpdate(){
+  const d=simDelta(sim.price);
+  const posDelta=Math.round(-d*sim.contracts*sim.mult);
+  document.getElementById('sim-price').textContent='$'+sim.price.toFixed(2);
+  document.getElementById('sim-delta').textContent=d.toFixed(3);
+  document.getElementById('sim-posdelta').textContent=posDelta.toLocaleString();
+  document.getElementById('sim-shares').textContent=sim.shares.toLocaleString();
+  document.getElementById('sim-net').textContent=(posDelta+sim.shares).toLocaleString();
+  document.getElementById('sim-net').style.color=Math.abs(posDelta+sim.shares)<100?'var(--green)':'var(--yellow)';
+}
+function simMove(dir){
+  const oldD=simDelta(sim.price);
+  sim.price+=dir;
+  const newD=simDelta(sim.price);
+  const needed=Math.round(newD*sim.contracts*sim.mult);
+  const diff=needed-sim.shares;
+  const log=document.getElementById('sim-log');
+  log.innerHTML+=`<div>Price → $${sim.price.toFixed(2)} | Delta: ${oldD.toFixed(3)} → ${newD.toFixed(3)}</div>`;
+  if(diff>0){
+    log.innerHTML+=`<div class="buy">🟢 BUY ${diff} shares to hedge (dealer chases the move up)</div>`;
+  } else if(diff<0){
+    log.innerHTML+=`<div class="sell">🔴 SELL ${Math.abs(diff)} shares to hedge (dealer chases the move down)</div>`;
+  }
+  sim.shares=needed;
+  simUpdate();
+  log.scrollTop=log.scrollHeight;
+}
+function simReset(){
+  sim.price=90;sim.shares=5000;
+  document.getElementById('sim-log').innerHTML='<div>📋 Reset. Dealer sold 100 calls @ strike $90. Price: $90. Delta ≈ 0.50.</div><div>📋 Holding 5,000 shares to neutralize.</div>';
+  simUpdate();
+}
+simUpdate();
+
+// ======== REGIME TOGGLE ========
+function showRegime(mode,btn){
+  document.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('regime-pos').style.display=mode==='pos'||mode==='both'?'block':'none';
+  document.getElementById('regime-neg').style.display=mode==='neg'||mode==='both'?'block':'none';
+  document.getElementById('regime-both').style.display=mode==='both'?'block':'none';
+  if(mode==='pos'||mode==='both')drawRegimeCanvas('regimePosCanvas','pos');
+  if(mode==='neg'||mode==='both')drawRegimeCanvas('regimeNegCanvas','neg');
+}
+
+function drawRegimeCanvas(id,type){
+  const c=document.getElementById(id);if(!c)return;
+  const ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#0a0e17';ctx.fillRect(0,0,W,H);
+  // Draw price movement
+  ctx.lineWidth=2.5;
+  const points=[];let y=H/2;
+  for(let x=0;x<W;x+=3){
+    if(type==='pos'){
+      y+=(Math.random()-0.5)*6;
+      y=y*0.97+(H/2)*0.03; // mean revert
+    } else {
+      const trend=(x<W/2)?-1:1;
+      y+=(Math.random()-0.5)*8+trend*0.8;
+    }
+    y=Math.max(20,Math.min(H-20,y));
+    points.push({x,y});
+  }
+  ctx.strokeStyle=type==='pos'?'#34d399':'#f87171';
+  ctx.beginPath();points.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.stroke();
+  // Center line
+  ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();ctx.setLineDash([]);
+  // Label
+  ctx.fillStyle='#64748b';ctx.font='11px monospace';
+  ctx.fillText(type==='pos'?'Mean-reverting — volatility compressed':'Trending — volatility amplified',10,16);
+}
+
+// ======== CALL RESISTANCE DIAGRAM ========
+function drawCallRes(){
+  const c=document.getElementById('callResCanvas'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#111827';ctx.fillRect(0,0,W,H);
+  // Call wall
+  const wallX=W*0.65;
+  ctx.fillStyle='#22d3ee15';ctx.fillRect(wallX-30,0,60,H);
+  ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(wallX,0);ctx.lineTo(wallX,H);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#22d3ee';ctx.font='bold 12px monospace';ctx.fillText('CALL WALL',wallX-35,20);
+  // Price approaching (decelerating)
+  ctx.strokeStyle='#34d399';ctx.lineWidth=2.5;ctx.beginPath();
+  let y=H*0.7;
+  for(let x=30;x<wallX-5;x+=2){
+    const progress=x/(wallX-5);
+    const slope=-0.6*(1-progress*progress);
+    y+=slope;
+    x===30?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // Arrows showing deceleration
+  ctx.fillStyle='#64748b';ctx.font='11px monospace';
+  ctx.fillText('Price decelerates →',60,H*0.5);
+  ctx.fillText('← Dealer selling',wallX+40,H*0.4);
+  ctx.fillStyle='#fbbf24';ctx.fillText('Breakout? → Gamma flip, squeeze',wallX+10,H-15);
+}
+drawCallRes();
+
+// ======== ASYMMETRY DIAGRAM ========
+function drawAsym(){
+  const c=document.getElementById('asymCanvas'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#111827';ctx.fillRect(0,0,W,H);
+  const midY=H/2;
+  // Call wall (top)
+  ctx.fillStyle='#34d39915';ctx.fillRect(0,10,W,40);
+  ctx.fillStyle='#34d399';ctx.font='bold 12px monospace';ctx.fillText('CALL RESISTANCE',20,32);
+  // Put wall (bottom)
+  ctx.fillStyle='#f8717115';ctx.fillRect(0,H-50,W,40);
+  ctx.fillStyle='#f87171';ctx.fillText('PUT SUPPORT',20,H-22);
+  // Price approaching call (slow, decelerating)
+  ctx.strokeStyle='#34d399';ctx.lineWidth=2.5;ctx.beginPath();
+  for(let x=50;x<W/2-20;x+=2){
+    const t=(x-50)/(W/2-70);
+    const y=midY-t*t*(midY-60);
+    x===50?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#34d399';ctx.font='11px monospace';ctx.fillText('Slow approach ↑',100,midY+20);
+  // Price approaching put (fast, accelerating)
+  ctx.strokeStyle='#f87171';ctx.lineWidth=2.5;ctx.beginPath();
+  for(let x=W/2+50;x<W-30;x+=2){
+    const t=(x-W/2-50)/(W-80-W/2-50);
+    const y=midY+t*t*(H-50-midY);
+    x===W/2+50?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#f87171';ctx.font='11px monospace';ctx.fillText('Fast approach ↓',W/2+100,midY+20);
+  // Center divider
+  ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(W/2,10);ctx.lineTo(W/2,H-10);ctx.stroke();ctx.setLineDash([]);
+}
+drawAsym();
+
+// ======== INIT REGIME CANVAS ========
+setTimeout(()=>drawRegimeCanvas('regimePosCanvas','pos'),100);
+</script>
+</body>
+</html>
